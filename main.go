@@ -9,8 +9,9 @@ import (
 )
 
 func main() {
-	ebiten.SetWindowSize(app.ScreenWidth, app.ScreenHeight)
+	ebiten.SetWindowSize(app.DefaultScreenWidth, app.DefaultScreenHeight)
 	ebiten.SetWindowTitle("Dice Wars")
+	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)
 
 	if err := ebiten.RunGame(app.NewApp()); err != nil {
 		log.Fatal(err)

@@ -43,6 +43,18 @@ func NewHexGrid() *HexGrid {
 	return g
 }
 
+// MapPixelWidth returns the bounding-box width of the hex grid in pixels.
+func MapPixelWidth() float64 {
+	colStep := math.Sqrt(3) / 2 * (HexRadius * 2)
+	return colStep*(GridWidth-1) + colStep/2 + HexRadius*2
+}
+
+// MapPixelHeight returns the bounding-box height of the hex grid in pixels.
+func MapPixelHeight() float64 {
+	rowStep := HexRadius * 2 * 3 / 4
+	return rowStep*(GridHeight-1) + HexRadius*2
+}
+
 func (g *HexGrid) Neighbor(h *Hex, dir int) *Hex {
 	d := Directions[dir%6]
 	ax := Axial{Q: h.Axial.Q + d[0], R: h.Axial.R + d[1]}

@@ -6,7 +6,8 @@ import (
 	"github.com/samuelyuan/dice-wars/internal/game"
 )
 
-func drawMap(screen *ebiten.Image, board *game.Board) {
+func drawMap(screen *ebiten.Image, board *game.Board, lc *LayoutContext) {
+	offsetX, offsetY := lc.MapOffsetX(), lc.MapOffsetY()
 	order := drawOrderTerritories(board.Territories, board)
 
 	for _, t := range order {
@@ -14,25 +15,25 @@ func drawMap(screen *ebiten.Image, board *game.Board) {
 		fill := playerFill(t.Owner, highlighted)
 		for _, ax := range t.CellIDs {
 			h := board.Grid.Hexes[ax]
-			drawHexFill(screen, h, MapOffsetX, MapOffsetY, fill)
+			drawHexFill(screen, h, offsetX, offsetY, fill)
 		}
 	}
 
 	for _, t := range order {
 		for _, ax := range t.CellIDs {
 			h := board.Grid.Hexes[ax]
-			drawHexBorders(screen, board, board.Grid, board.Territories, h, t, MapOffsetX, MapOffsetY)
+			drawHexBorders(screen, board, board.Grid, board.Territories, h, t, offsetX, offsetY)
 		}
 	}
 
 	for _, t := range order {
-		drawTerritoryDice(screen, t)
+		drawTerritoryDice(screen, t, offsetX, offsetY)
 	}
 }
 
-func drawTerritoryDice(screen *ebiten.Image, t *game.Territory) {
-	cx := MapOffsetX + t.CenterX
-	cy := MapOffsetY + t.CenterY
+func drawTerritoryDice(screen *ebiten.Image, t *game.Territory, offsetX, offsetY float64) {
+	cx := offsetX + t.CenterX
+	cy := offsetY + t.CenterY
 
 	rightColumnCount := t.NumDice
 	if rightColumnCount > game.MaxDice/2 {

@@ -9,7 +9,7 @@ import (
 
 func (a *App) handleGameInput() {
 	mx, my := ebiten.CursorPosition()
-	a.hoverBtn = a.hoveredButton(mx, my)
+	a.hoverBtn = a.hoveredButton(mx, my, a.layout)
 
 	if !inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		return
@@ -25,31 +25,31 @@ func (a *App) handleGameInput() {
 	case "cheat":
 		a.board.CheatMode = !a.board.CheatMode
 	default:
-		if my < int(mapContentBottom()) && !a.board.IsBusy() {
-			a.board.Click(float64(mx)-MapOffsetX, float64(my)-MapOffsetY)
+		if my < int(a.layout.mapContentBottom()) && !a.board.IsBusy() {
+			a.board.Click(float64(mx)-a.layout.MapOffsetX(), float64(my)-a.layout.MapOffsetY())
 		}
 	}
 }
 
-func (a *App) hoveredButton(mx, my int) string {
-	if BtnMenu.Contains(mx, my) {
+func (a *App) hoveredButton(mx, my int, lc *LayoutContext) string {
+	if lc.BtnMenu().Contains(mx, my) {
 		return "menu"
 	}
 	if a.board.IsHumanTurn() {
-		if BtnEndTurn.Contains(mx, my) {
+		if lc.BtnEndTurn().Contains(mx, my) {
 			return "end"
 		}
-		if BtnAuto.Contains(mx, my) {
+		if lc.BtnAuto().Contains(mx, my) {
 			return "auto"
 		}
 	}
-	if CheatHit.Contains(mx, my) {
+	if lc.CheatHit().Contains(mx, my) {
 		return "cheat"
 	}
 	return ""
 }
 
-func drawGame(screen *ebiten.Image, board *game.Board, hoverBtn string) {
-	drawMap(screen, board)
-	drawGameHUD(screen, board, hoverBtn)
+func drawGame(screen *ebiten.Image, board *game.Board, hoverBtn string, lc *LayoutContext) {
+	drawMap(screen, board, lc)
+	drawGameHUD(screen, board, hoverBtn, lc)
 }

@@ -21,10 +21,10 @@ const (
 	battlePanelWidth    = 520.0
 )
 
-func drawDiceRoll(screen *ebiten.Image, board *game.Board) {
+func drawDiceRoll(screen *ebiten.Image, board *game.Board, lc *LayoutContext) {
 	attack := board.LastAttack
-	layout := computeBattlePanelLayout()
-	centerX := float64(ScreenWidth / 2)
+	layout := lc.computeBattlePanelLayout()
+	centerX := float64(lc.Width / 2)
 	centerY := layout.centerY
 
 	drawBattlePanel(screen, centerX, centerY, layout.height)
@@ -41,7 +41,8 @@ func drawDiceRoll(screen *ebiten.Image, board *game.Board) {
 		drawBattleSide(screen, centerX, centerY, layout.diceSize, attack.DefenderRolls, defenderRevealed, attack.DefenseTotal, defenderOwner, false)
 	}
 	if attackerRevealed == 0 && defenderRevealed == 0 {
-		drawText(screen, "Rolling...", textCenterX(int(centerX)-100, 200, "Rolling..."), int(centerY)+4, colorText)
+		textWidth := len("Rolling...") * 7
+		drawText(screen, "Rolling...", int(centerX)-textWidth/2, int(centerY)+4, colorText)
 	}
 }
 

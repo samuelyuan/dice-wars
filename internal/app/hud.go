@@ -10,53 +10,54 @@ import (
 	"github.com/samuelyuan/dice-wars/internal/game"
 )
 
-func drawGameHUD(screen *ebiten.Image, board *game.Board, hoverBtn string) {
+func drawGameHUD(screen *ebiten.Image, board *game.Board, hoverBtn string, lc *LayoutContext) {
 	if board.Phase == game.PhaseDiceRoll {
-		drawDiceRoll(screen, board)
+		drawDiceRoll(screen, board, lc)
 	}
 
-	drawTurnBanner(screen, board)
-	drawPlayerBar(screen, board)
+	drawTurnBanner(screen, board, lc)
+	drawPlayerBar(screen, board, lc)
 
 	if board.StatusMessage != "" {
-		drawText(screen, board.StatusMessage, textCenterX(0, ScreenWidth, board.StatusMessage), StatusTextY, colorText)
+		drawText(screen, board.StatusMessage, textCenterX(0, lc.Width, board.StatusMessage), int(lc.StatusTextY()), colorText)
 	}
 
 	if board.IsHumanTurn() {
-		BtnEndTurn.Draw(screen, hoverBtn == "end")
-		BtnAuto.Draw(screen, hoverBtn == "auto")
+		lc.BtnEndTurn().Draw(screen, hoverBtn == "end")
+		lc.BtnAuto().Draw(screen, hoverBtn == "auto")
 	}
-	BtnMenu.Draw(screen, hoverBtn == "menu")
+	lc.BtnMenu().Draw(screen, hoverBtn == "menu")
 
 	if board.CheatMode {
-		drawText(screen, "Cheater!", CheatHit.X, CheatHit.Y+14, colorText)
+		cheatRect := lc.CheatHit()
+		drawText(screen, "Cheater!", cheatRect.X, cheatRect.Y+14, colorText)
 	}
 }
 
-func drawTurnBanner(screen *ebiten.Image, board *game.Board) {
+func drawTurnBanner(screen *ebiten.Image, board *game.Board, lc *LayoutContext) {
 	banner := board.TurnBanner()
 	player := board.Players[board.PlayerTurn]
 
-	bx := float32(TurnBannerX)
-	by := float32(TurnBannerY)
+	bx := float32(lc.TurnBannerX())
+	by := float32(lc.TurnBannerY())
 	vector.DrawFilledRect(screen, bx, by, TurnBannerW, TurnBannerH, color.RGBA{248, 248, 248, 255}, false)
 	vector.StrokeRect(screen, bx, by, TurnBannerW, TurnBannerH, 2, color.Black, false)
 	drawPlayerIcon(screen, float64(bx)+18, float64(by)+16, 20, player.Index)
 	drawText(screen, banner, int(bx)+34, int(by)+22, colorText)
 }
 
-func drawPlayerBar(screen *ebiten.Image, board *game.Board) {
-	startX := (ScreenWidth - board.NumPlayers*PlayerBarSlotW) / 2
+func drawPlayerBar(screen *ebiten.Image, board *game.Board, lc *LayoutContext) {
+	startX := (lc.Width - board.NumPlayers*PlayerBarSlotW) / 2
 
 	for i := 0; i < board.NumPlayers; i++ {
 		if !board.IsPlayerActive(i) {
 			continue
 		}
-		drawPlayerBarSlot(screen, board, i, startX+i*PlayerBarSlotW)
+		drawPlayerBarSlot(screen, board, i, startX+i*PlayerBarSlotW, lc)
 	}
 }
 
-func drawPlayerBarSlot(screen *ebiten.Image, board *game.Board, playerIdx, x int) {
+func drawPlayerBarSlot(screen *ebiten.Image, board *game.Board, playerIdx, x int, lc *LayoutContext) {
 	bg := color.RGBA{255, 255, 255, 255}
 	if playerIdx == board.PlayerTurn {
 		bg = color.RGBA{255, 255, 0, 255}
@@ -65,8 +66,9 @@ func drawPlayerBarSlot(screen *ebiten.Image, board *game.Board, playerIdx, x int
 		}
 	}
 	slotW := PlayerBarSlotW - 8
-	vector.DrawFilledRect(screen, float32(x), float32(PlayerBarY), float32(slotW), PlayerBarHeight, bg, false)
-	vector.StrokeRect(screen, float32(x), float32(PlayerBarY), float32(slotW), PlayerBarHeight, 2, color.Black, false)
-	drawPlayerIcon(screen, float64(x+22), float64(PlayerBarY+PlayerBarHeight/2), 28, playerIdx)
-	drawText(screen, strconv.Itoa(board.ConnectedTerrCount(playerIdx)), x+42, PlayerBarY+26, colorText)
+	playerBarY := int(lc.PlayerBarY())
+	vector.DrawFilledRect(screen, float32(x), float32(playerBarY), float32(slotW), PlayerBarHeight, bg, false)
+	vector.StrokeRect(screen, float32(x), float32(playerBarY), float32(slotW), PlayerBarHeight, 2, color.Black, false)
+	drawPlayerIcon(screen, float64(x+22), float64(playerBarY+PlayerBarHeight/2), 28, playerIdx)
+	drawText(screen, strconv.Itoa(board.ConnectedTerrCount(playerIdx)), x+42, playerBarY+26, colorText)
 }

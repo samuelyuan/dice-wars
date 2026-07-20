@@ -10,7 +10,7 @@ import (
 	"github.com/samuelyuan/dice-wars/internal/game"
 )
 
-func drawGameHUD(screen *ebiten.Image, board *game.Board, hoverBtn string, lc *LayoutContext) {
+func drawGameHUD(screen *ebiten.Image, board *game.Board, hoverBtn string, lc *LayoutContext, fastForward bool) {
 	if board.Phase == game.PhaseDiceRoll {
 		drawDiceRoll(screen, board, lc)
 	}
@@ -27,6 +27,9 @@ func drawGameHUD(screen *ebiten.Image, board *game.Board, hoverBtn string, lc *L
 		lc.BtnAuto().Draw(screen, hoverBtn == "auto")
 	}
 	lc.BtnMenu().Draw(screen, hoverBtn == "menu")
+
+	// Fast-forward stays visually "pressed" while active, not just on hover.
+	lc.BtnFastForward().Draw(screen, fastForward || hoverBtn == "fastforward")
 
 	if board.CheatMode {
 		cheatRect := lc.CheatHit()

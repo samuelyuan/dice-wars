@@ -18,6 +18,8 @@ func (a *App) handleGameInput() {
 	switch a.hoverBtn {
 	case "menu":
 		a.wantMenu = true
+	case "fastforward":
+		a.fastForward = !a.fastForward
 	case "end":
 		a.board.EndTurn()
 	case "auto":
@@ -35,6 +37,9 @@ func (a *App) hoveredButton(mx, my int, lc *LayoutContext) string {
 	if lc.BtnMenu().Contains(mx, my) {
 		return "menu"
 	}
+	if lc.BtnFastForward().Contains(mx, my) {
+		return "fastforward"
+	}
 	if a.board.IsHumanTurn() {
 		if lc.BtnEndTurn().Contains(mx, my) {
 			return "end"
@@ -49,7 +54,7 @@ func (a *App) hoveredButton(mx, my int, lc *LayoutContext) string {
 	return ""
 }
 
-func drawGame(screen *ebiten.Image, board *game.Board, hoverBtn string, lc *LayoutContext) {
+func drawGame(screen *ebiten.Image, board *game.Board, hoverBtn string, lc *LayoutContext, fastForward bool) {
 	drawMap(screen, board, lc)
-	drawGameHUD(screen, board, hoverBtn, lc)
+	drawGameHUD(screen, board, hoverBtn, lc, fastForward)
 }

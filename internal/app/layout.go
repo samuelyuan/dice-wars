@@ -65,6 +65,12 @@ func (lc *LayoutContext) BtnMenu() Button {
 	return Button{X: 10, Y: int(lc.PlayerBarY()) - 60, W: 120, H: 30, Label: "Menu"}
 }
 
+// BtnFastForward toggles a large speed multiplier for blowing through
+// AI-heavy stretches.
+func (lc *LayoutContext) BtnFastForward() Button {
+	return Button{X: 140, Y: int(lc.PlayerBarY()) - 60, W: 100, H: 30, Label: "Fast Fwd"}
+}
+
 func (lc *LayoutContext) BtnEndTurn() Button {
 	return Button{X: lc.Width - 140, Y: int(lc.PlayerBarY()) - 50, W: 120, H: 40, Label: "End Turn"}
 }

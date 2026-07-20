@@ -12,12 +12,13 @@ import (
 const frameDuration = 1.0 / 60.0
 
 type App struct {
-	screen   Screen
-	menu     *Menu
-	board    *game.Board
-	hoverBtn string
-	wantMenu bool
-	layout   *LayoutContext
+	screen      Screen
+	menu        *Menu
+	board       *game.Board
+	hoverBtn    string
+	wantMenu    bool
+	layout      *LayoutContext
+	fastForward bool // speeds up AI turns while true
 }
 
 type Screen int
@@ -34,6 +35,17 @@ func NewApp() *App {
 		menu:   NewMenu(),
 		layout: &LayoutContext{Width: DefaultScreenWidth, Height: DefaultScreenHeight},
 	}
+}
+
+// fastForwardSpeed is the multiplier applied to AI turns while Fast Forward
+// is toggled on.
+const fastForwardSpeed = 50.0
+
+func (a *App) effectiveGameSpeed() float64 {
+	if a.fastForward {
+		return fastForwardSpeed
+	}
+	return 1.0
 }
 
 func (a *App) Update() error {
@@ -79,7 +91,7 @@ func (a *App) updateGame() {
 		a.screen = ScreenMenu
 		return
 	}
-	a.board.Update(frameDuration)
+	a.board.Update(frameDuration * a.effectiveGameSpeed())
 	if a.board.GameOver {
 		a.screen = ScreenVictory
 	}
@@ -101,7 +113,7 @@ func (a *App) Draw(screen *ebiten.Image) {
 		a.menu.Draw(screen, a.layout)
 	case ScreenGame:
 		if a.board != nil {
-			drawGame(screen, a.board, a.hoverBtn, a.layout)
+			drawGame(screen, a.board, a.hoverBtn, a.layout, a.fastForward)
 		}
 	case ScreenVictory:
 		if a.board != nil {

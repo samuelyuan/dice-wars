@@ -68,9 +68,10 @@ func (m *Menu) Draw(screen *ebiten.Image, lc *LayoutContext) {
 		drawMenuPlayerSlot(screen, i, lc)
 	}
 
-	lc.MenuBtnRemovePlayer().Draw(screen, false)
-	lc.MenuBtnAddPlayer().Draw(screen, false)
-	lc.MenuBtnStart().Draw(screen, false)
+	mx, my := ebiten.CursorPosition()
+	lc.MenuBtnRemovePlayer().Draw(screen, lc.MenuBtnRemovePlayer().Contains(mx, my))
+	lc.MenuBtnAddPlayer().Draw(screen, lc.MenuBtnAddPlayer().Contains(mx, my))
+	lc.MenuBtnStart().Draw(screen, lc.MenuBtnStart().Contains(mx, my))
 }
 
 func (m *Menu) playersSummary() string {

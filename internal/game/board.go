@@ -489,3 +489,25 @@ func (b *Board) IsPlayerActive(playerIdx int) bool {
 	}
 	return len(b.Players[playerIdx].TerritoryIDs) > 0
 }
+
+// HumanIndex returns the index of the human player, or -1 if there isn't one.
+func (b *Board) HumanIndex() int {
+	for i, p := range b.Players {
+		if p.Human {
+			return i
+		}
+	}
+	return -1
+}
+
+// HumanEliminated reports whether the human player has lost all territory
+// but the game hasn't concluded yet (other players are still fighting it
+// out). Returns false once GameOver is true — that's a normal end-of-game,
+// not a mid-game elimination.
+func (b *Board) HumanEliminated() bool {
+	if b.GameOver {
+		return false
+	}
+	idx := b.HumanIndex()
+	return idx >= 0 && !b.IsPlayerActive(idx)
+}

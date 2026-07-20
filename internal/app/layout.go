@@ -128,6 +128,47 @@ func (lc *LayoutContext) MenuPlayerRowH() int {
 	return 90
 }
 
+// Game-over overlay: shown mid-game when the human loses their last
+// territory but other players are still fighting it out. No Replay button —
+// replay isn't implemented on this branch.
+const (
+	eliminationBtnW   = 180
+	eliminationBtnH   = 50
+	eliminationBtnGap = 20
+)
+
+func (lc *LayoutContext) eliminationButtonsY() int {
+	return lc.Height/2 + 30
+}
+
+// buttonRowStartX centers a row of two eliminationBtnW-sized buttons,
+// shared by the elimination overlay and the victory screen.
+func (lc *LayoutContext) buttonRowStartX() int {
+	total := 2*eliminationBtnW + eliminationBtnGap
+	return lc.Width/2 - total/2
+}
+
+func (lc *LayoutContext) EliminationRestartButton() Button {
+	return Button{X: lc.buttonRowStartX(), Y: lc.eliminationButtonsY(), W: eliminationBtnW, H: eliminationBtnH, Label: "Restart"}
+}
+
+func (lc *LayoutContext) EliminationNewGameButton() Button {
+	x := lc.buttonRowStartX() + eliminationBtnW + eliminationBtnGap
+	return Button{X: x, Y: lc.eliminationButtonsY(), W: eliminationBtnW, H: eliminationBtnH, Label: "New Game"}
+}
+
+func (lc *LayoutContext) victoryButtonsY() int {
+	return lc.Height/2 + 60
+}
+
+func (lc *LayoutContext) VictoryRestartButton() Button {
+	return Button{X: lc.buttonRowStartX(), Y: lc.victoryButtonsY(), W: eliminationBtnW, H: eliminationBtnH, Label: "Restart"}
+}
+
+func (lc *LayoutContext) VictoryMenuButton() Button {
+	x := lc.buttonRowStartX() + eliminationBtnW + eliminationBtnGap
+	return Button{X: x, Y: lc.victoryButtonsY(), W: eliminationBtnW, H: eliminationBtnH, Label: "Main Menu"}
+}
 type battlePanelLayout struct {
 	centerY  float64
 	height   float64

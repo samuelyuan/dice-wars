@@ -26,7 +26,6 @@ type Board struct {
 	SelectedTerr  int // territory ID, -1 if none
 	OtherTerr     int
 	Phase         Phase
-	CheatMode     bool
 	AutoMode      bool
 	StatusMessage string
 	LastAttack    AttackResult
@@ -37,6 +36,10 @@ type Board struct {
 	growPending   bool
 	seed          uint64
 	rng           *rand.Rand
+	Actions       []Action
+
+	// replay, if set, drives every decision from the recorded log.
+	replay *replayFeed
 }
 
 const minTerritoryCells = 6
@@ -55,6 +58,25 @@ func NewBoardWithSeed(numPlayers int, humanList []bool, seed uint64) *Board {
 	}
 	b.setup(humanList)
 	return b
+}
+
+// newReplayBoard builds a board driven entirely by a recorded replay.
+func newReplayBoard(r *Replay) *Board {
+	b := &Board{
+		NumPlayers:    r.NumPlayers,
+		SelectedTerr:  -1,
+		OtherTerr:     -1,
+		VictoryPlayer: -1,
+		seed:          r.Seed,
+		replay:        &replayFeed{actions: r.Actions},
+	}
+	b.setup(r.HumanList)
+	return b
+}
+
+// ReplayExhausted reports whether the replay log is fully consumed.
+func (b *Board) ReplayExhausted() bool {
+	return b.replay != nil && b.replay.exhausted()
 }
 
 func (b *Board) Initialize() {
@@ -90,6 +112,7 @@ func (b *Board) resetForNewGame() {
 	b.StatusMessage = ""
 	b.phaseTimer = 0
 	b.growPending = false
+	b.Actions = nil
 }
 
 func (b *Board) createPlayers(humanList []bool) {
@@ -254,14 +277,37 @@ func (b *Board) processAttack() {
 	attackerTerr.Selected = true
 	defenderTerr.Selected = true
 
-	attacker := b.Players[attackerTerr.Owner]
-	defender := b.Players[defenderTerr.Owner]
-	cheatAttacker := b.CheatMode && attacker.Human
-	cheatDefender := b.CheatMode && defender.Human
+	if b.replay != nil {
+		b.resolveAttackFromReplay()
+	} else {
+		b.resolveAttackLive(attackerTerr, defenderTerr)
+	}
 
-	b.LastAttack = ResolveAttack(b.rng, attackerTerr.NumDice, defenderTerr.NumDice, cheatAttacker, cheatDefender)
 	b.Phase = PhaseDiceRoll
 	b.phaseTimer = 0
+}
+
+// resolveAttackFromReplay applies the next recorded attack's dice rolls, if
+// one is queued up. Filters by type only (not player index) since the
+// selection that led here already came from the same recorded action.
+func (b *Board) resolveAttackFromReplay() {
+	if action, ok := b.replay.peek(); ok && action.Type == ActionAttack {
+		b.replay.advance()
+		b.LastAttack = attackResultFromRolls(action.AttackerRolls, action.DefenderRolls)
+	}
+}
+
+// resolveAttackLive rolls fresh dice and records the outcome.
+func (b *Board) resolveAttackLive(attackerTerr, defenderTerr *Territory) {
+	b.LastAttack = ResolveAttack(b.rng, attackerTerr.NumDice, defenderTerr.NumDice)
+	b.RecordAction(Action{
+		Type:          ActionAttack,
+		PlayerIndex:   attackerTerr.Owner,
+		TerritoryID:   b.SelectedTerr,
+		OtherTerrID:   b.OtherTerr,
+		AttackerRolls: b.LastAttack.AttackerRolls,
+		DefenderRolls: b.LastAttack.DefenderRolls,
+	})
 }
 
 func (b *Board) attackFinished() {
@@ -286,7 +332,7 @@ func (b *Board) attackFinished() {
 }
 
 func (b *Board) resumeAfterAttack(attackerIdx int) {
-	if b.AutoMode || !b.Players[attackerIdx].Human {
+	if b.AutoMode || b.shouldAutoAdvance(attackerIdx) {
 		b.Phase = PhaseAIWait
 		b.phaseTimer = intervalSec(AIStepInterval)
 		return
@@ -301,10 +347,17 @@ func (b *Board) EndTurn() {
 	b.concludeTurnWithReinforcements()
 }
 
+// concludeTurnWithReinforcements ends the turn via End Turn or AI running dry.
 func (b *Board) concludeTurnWithReinforcements() {
 	if b.GameOver {
 		return
 	}
+	if b.replay != nil {
+		b.replay.consumeMatching(ActionTurnEnd, b.PlayerTurn)
+	} else {
+		b.RecordAction(Action{Type: ActionTurnEnd, PlayerIndex: b.PlayerTurn})
+	}
+
 	b.AutoMode = false
 	player := b.Players[b.PlayerTurn]
 	player.addDice(b.rng, player.LargestConnectedGroup(b.Territories), false, b.Territories)
@@ -314,8 +367,37 @@ func (b *Board) concludeTurnWithReinforcements() {
 }
 
 func (b *Board) growStep() {
+	if b.replay != nil {
+		b.growStepFromReplay()
+	} else {
+		b.growStepLive()
+	}
+}
+
+// growStepFromReplay applies one recorded die placement, or ends the turn
+// once the replay has no more placements queued for this player.
+func (b *Board) growStepFromReplay() {
 	player := b.Players[b.PlayerTurn]
-	if player.distributeDice(b.rng, 1, b.Territories) && player.RemainingDice > 0 {
+	if action, ok := b.replay.consumeMatching(ActionGrowthPlace, b.PlayerTurn); ok {
+		terr := b.Territories[action.TerritoryID]
+		terr.setNumDice(terr.NumDice + 1)
+		player.RemainingDice--
+		if player.RemainingDice > 0 {
+			b.phaseTimer = intervalSec(GrowthInterval)
+			return
+		}
+	}
+	b.advancePlayerTurn()
+}
+
+// growStepLive places one reinforcement die via RNG and records it.
+func (b *Board) growStepLive() {
+	player := b.Players[b.PlayerTurn]
+	lastPlaced, placed := player.distributeDice(b.rng, 1, b.Territories)
+	if placed {
+		b.RecordAction(Action{Type: ActionGrowthPlace, PlayerIndex: b.PlayerTurn, TerritoryID: lastPlaced})
+	}
+	if placed && player.RemainingDice > 0 {
 		b.phaseTimer = intervalSec(GrowthInterval)
 		return
 	}
@@ -330,9 +412,14 @@ func (b *Board) advancePlayerTurn() {
 	b.AutoMode = false
 	b.updateStatusForTurn()
 
-	if !b.Players[b.PlayerTurn].Human {
+	if b.shouldAutoAdvance(b.PlayerTurn) {
 		b.scheduleAITurn()
 	}
+}
+
+// shouldAutoAdvance: true for AI players, and for everyone during replay.
+func (b *Board) shouldAutoAdvance(playerIdx int) bool {
+	return b.replay != nil || !b.Players[playerIdx].Human
 }
 
 func (b *Board) advanceToNextActivePlayer() {
@@ -347,7 +434,7 @@ func (b *Board) advanceToNextActivePlayer() {
 func (b *Board) beginTurn(playerIdx int) {
 	b.PlayerTurn = playerIdx
 	b.updateStatusForTurn()
-	if !b.Players[b.PlayerTurn].Human {
+	if b.shouldAutoAdvance(b.PlayerTurn) {
 		b.scheduleAITurn()
 	}
 }
@@ -382,7 +469,14 @@ func (b *Board) nextAIStep() {
 		return
 	}
 
-	attackerID, defenderID, found := b.findAIAttackTarget(player)
+	var attackerID, defenderID int
+	var found bool
+	if b.replay != nil {
+		attackerID, defenderID, found = b.nextAttackTargetFromReplay()
+	} else {
+		attackerID, defenderID, found = b.findAIAttackTarget(player)
+	}
+
 	if found {
 		b.SelectedTerr = attackerID
 		b.OtherTerr = defenderID
@@ -392,6 +486,17 @@ func (b *Board) nextAIStep() {
 	}
 
 	b.concludeTurnWithReinforcements()
+}
+
+// nextAttackTargetFromReplay looks ahead at the next recorded attack for the
+// current player without consuming it — processAttack consumes it once the
+// attack resolves.
+func (b *Board) nextAttackTargetFromReplay() (attackerID, defenderID int, found bool) {
+	action, ok := b.replay.peekMatching(ActionAttack, b.PlayerTurn)
+	if !ok {
+		return 0, 0, false
+	}
+	return action.TerritoryID, action.OtherTerrID, true
 }
 
 func (b *Board) findAIAttackTarget(player *Player) (attackerID, defenderID int, found bool) {
@@ -500,10 +605,7 @@ func (b *Board) HumanIndex() int {
 	return -1
 }
 
-// HumanEliminated reports whether the human player has lost all territory
-// but the game hasn't concluded yet (other players are still fighting it
-// out). Returns false once GameOver is true — that's a normal end-of-game,
-// not a mid-game elimination.
+// HumanEliminated: human is out but others are still fighting (false once GameOver).
 func (b *Board) HumanEliminated() bool {
 	if b.GameOver {
 		return false

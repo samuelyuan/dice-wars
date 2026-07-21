@@ -70,25 +70,31 @@ func (p *Player) addDice(rng *rand.Rand, count int, distribute bool, territories
 	}
 }
 
-func (p *Player) distributeDice(rng *rand.Rand, count int, territories []*Territory) bool {
+// distributeDice places up to count dice and reports the last territory ID
+// placed on (-1 if none), so growStep can record where it went.
+func (p *Player) distributeDice(rng *rand.Rand, count int, territories []*Territory) (lastPlaced int, ok bool) {
 	if count > p.RemainingDice {
 		count = p.RemainingDice
 	}
 	territoryCount := len(p.TerritoryIDs)
 	if territoryCount == 0 {
-		return false
+		return -1, false
 	}
 
+	lastPlaced = -1
 	for placed := 0; placed < count; placed++ {
-		if !p.placeOneDie(rng, territories, territoryCount) {
-			return false
+		tid, didPlace := p.placeOneDie(rng, territories, territoryCount)
+		if !didPlace {
+			return lastPlaced, false
 		}
+		lastPlaced = tid
 	}
-	return true
+	return lastPlaced, true
 }
 
-func (p *Player) placeOneDie(rng *rand.Rand, territories []*Territory, territoryCount int) bool {
-	placed := false
+// placeOneDie places one die on a random eligible territory (skips ones at MaxDice).
+func (p *Player) placeOneDie(rng *rand.Rand, territories []*Territory, territoryCount int) (territoryID int, placed bool) {
+	territoryID = -1
 	forEachShuffled(territoryCount, rng, func(idx int) bool {
 		terr := territories[p.TerritoryIDs[idx]]
 		if terr.NumDice >= MaxDice {
@@ -96,8 +102,9 @@ func (p *Player) placeOneDie(rng *rand.Rand, territories []*Territory, territory
 		}
 		terr.setNumDice(terr.NumDice + 1)
 		p.RemainingDice--
+		territoryID = terr.ID
 		placed = true
 		return true
 	})
-	return placed
+	return territoryID, placed
 }

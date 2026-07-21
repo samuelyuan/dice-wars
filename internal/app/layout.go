@@ -79,10 +79,6 @@ func (lc *LayoutContext) BtnAuto() Button {
 	return Button{X: lc.Width - 270, Y: int(lc.PlayerBarY()) - 50, W: 100, H: 40, Label: "Auto"}
 }
 
-func (lc *LayoutContext) CheatHit() Rect {
-	return Rect{X: 300, Y: 5, W: 50, H: 20}
-}
-
 func (lc *LayoutContext) MenuBtnStart() Button {
 	return Button{X: lc.Width - 220, Y: lc.Height - 80, W: 200, H: 60, Label: "Start!"}
 }
@@ -128,9 +124,62 @@ func (lc *LayoutContext) MenuPlayerRowH() int {
 	return 90
 }
 
-// Game-over overlay: shown mid-game when the human loses their last
-// territory but other players are still fighting it out. No Replay button —
-// replay isn't implemented on this branch.
+// Replay control bar: sits below the player bar, replacing the live-game button row.
+const (
+	replayBarHeight   = 50
+	replayPlayBtnSize = 40
+	replaySpeedBtnW   = 46
+	replayExitBtnW    = 70
+	replaySideBtnH    = 30
+	replayBtnGap      = 10
+	replaySeekBarMinW = 100
+)
+
+func (lc *LayoutContext) ReplayBarY() int {
+	return int(lc.PlayerBarY()) + PlayerBarHeight + 8
+}
+
+func (lc *LayoutContext) ReplayPlayButton() Button {
+	y := lc.ReplayBarY() + (replayBarHeight-replayPlayBtnSize)/2
+	return Button{X: 20, Y: y, W: replayPlayBtnSize, H: replayPlayBtnSize}
+}
+
+// replaySpeedOptions are the playback speeds shown as chip buttons.
+var replaySpeedOptions = []float64{0.5, 1, 2, 3}
+
+func (lc *LayoutContext) ReplaySpeedButtons() []Button {
+	totalW := len(replaySpeedOptions)*replaySpeedBtnW + (len(replaySpeedOptions)-1)*replayBtnGap
+	startX := lc.Width - replayBtnGap - replayExitBtnW - replayBtnGap - totalW
+	y := lc.ReplayBarY() + (replayBarHeight-replaySideBtnH)/2
+
+	btns := make([]Button, len(replaySpeedOptions))
+	for i, speed := range replaySpeedOptions {
+		label := formatSpeed(speed) + "x"
+		btns[i] = Button{X: startX + i*(replaySpeedBtnW+replayBtnGap), Y: y, W: replaySpeedBtnW, H: replaySideBtnH, Label: label}
+	}
+	return btns
+}
+
+func (lc *LayoutContext) ReplayExitButton() Button {
+	y := lc.ReplayBarY() + (replayBarHeight-replaySideBtnH)/2
+	return Button{X: lc.Width - replayBtnGap - replayExitBtnW, Y: y, W: replayExitBtnW, H: replaySideBtnH, Label: "Exit"}
+}
+
+// ReplaySeekBar spans between the play button and the right-side controls.
+func (lc *LayoutContext) ReplaySeekBar() Rect {
+	play := lc.ReplayPlayButton()
+	x := play.X + play.W + 20
+	speedBtns := lc.ReplaySpeedButtons()
+	rightEdge := speedBtns[0].X - 20
+	w := rightEdge - x
+	if w < replaySeekBarMinW {
+		w = replaySeekBarMinW
+	}
+	y := lc.ReplayBarY() + replayBarHeight/2 - 4
+	return Rect{X: x, Y: y, W: w, H: 8}
+}
+
+// Three-button row shared by the elimination overlay and the victory screen.
 const (
 	eliminationBtnW   = 180
 	eliminationBtnH   = 50
@@ -141,33 +190,44 @@ func (lc *LayoutContext) eliminationButtonsY() int {
 	return lc.Height/2 + 30
 }
 
-// buttonRowStartX centers a row of two eliminationBtnW-sized buttons,
-// shared by the elimination overlay and the victory screen.
-func (lc *LayoutContext) buttonRowStartX() int {
-	total := 2*eliminationBtnW + eliminationBtnGap
+func (lc *LayoutContext) threeButtonRowStartX() int {
+	total := 3*eliminationBtnW + 2*eliminationBtnGap
 	return lc.Width/2 - total/2
 }
 
+// threeButtonRowButton returns the button at the given slot (0-2) in a
+// three-button row, shared by the elimination overlay and victory screen.
+func (lc *LayoutContext) threeButtonRowButton(slot int, y int, label string) Button {
+	x := lc.threeButtonRowStartX() + slot*(eliminationBtnW+eliminationBtnGap)
+	return Button{X: x, Y: y, W: eliminationBtnW, H: eliminationBtnH, Label: label}
+}
+
+func (lc *LayoutContext) EliminationReplayButton() Button {
+	return lc.threeButtonRowButton(0, lc.eliminationButtonsY(), "Replay")
+}
+
 func (lc *LayoutContext) EliminationRestartButton() Button {
-	return Button{X: lc.buttonRowStartX(), Y: lc.eliminationButtonsY(), W: eliminationBtnW, H: eliminationBtnH, Label: "Restart"}
+	return lc.threeButtonRowButton(1, lc.eliminationButtonsY(), "Restart")
 }
 
 func (lc *LayoutContext) EliminationNewGameButton() Button {
-	x := lc.buttonRowStartX() + eliminationBtnW + eliminationBtnGap
-	return Button{X: x, Y: lc.eliminationButtonsY(), W: eliminationBtnW, H: eliminationBtnH, Label: "New Game"}
+	return lc.threeButtonRowButton(2, lc.eliminationButtonsY(), "New Game")
 }
 
 func (lc *LayoutContext) victoryButtonsY() int {
 	return lc.Height/2 + 60
 }
 
+func (lc *LayoutContext) VictoryReplayButton() Button {
+	return lc.threeButtonRowButton(0, lc.victoryButtonsY(), "Replay")
+}
+
 func (lc *LayoutContext) VictoryRestartButton() Button {
-	return Button{X: lc.buttonRowStartX(), Y: lc.victoryButtonsY(), W: eliminationBtnW, H: eliminationBtnH, Label: "Restart"}
+	return lc.threeButtonRowButton(1, lc.victoryButtonsY(), "Restart")
 }
 
 func (lc *LayoutContext) VictoryMenuButton() Button {
-	x := lc.buttonRowStartX() + eliminationBtnW + eliminationBtnGap
-	return Button{X: x, Y: lc.victoryButtonsY(), W: eliminationBtnW, H: eliminationBtnH, Label: "Main Menu"}
+	return lc.threeButtonRowButton(2, lc.victoryButtonsY(), "Main Menu")
 }
 type battlePanelLayout struct {
 	centerY  float64

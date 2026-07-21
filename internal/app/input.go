@@ -24,8 +24,6 @@ func (a *App) handleGameInput() {
 		a.board.EndTurn()
 	case "auto":
 		a.board.StartAITurn()
-	case "cheat":
-		a.board.CheatMode = !a.board.CheatMode
 	default:
 		if my < int(a.layout.mapContentBottom()) && !a.board.IsBusy() {
 			a.board.Click(float64(mx)-a.layout.MapOffsetX(), float64(my)-a.layout.MapOffsetY())
@@ -48,13 +46,10 @@ func (a *App) hoveredButton(mx, my int, lc *LayoutContext) string {
 			return "auto"
 		}
 	}
-	if lc.CheatHit().Contains(mx, my) {
-		return "cheat"
-	}
 	return ""
 }
 
-func drawGame(screen *ebiten.Image, board *game.Board, hoverBtn string, lc *LayoutContext, fastForward bool) {
+func drawGame(screen *ebiten.Image, board *game.Board, hoverBtn string, lc *LayoutContext, showControls bool, fastForward bool) {
 	drawMap(screen, board, lc)
-	drawGameHUD(screen, board, hoverBtn, lc, fastForward)
+	drawGameHUD(screen, board, hoverBtn, lc, showControls, fastForward)
 }

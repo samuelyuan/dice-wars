@@ -10,13 +10,18 @@ import (
 	"github.com/samuelyuan/dice-wars/internal/game"
 )
 
-func drawGameHUD(screen *ebiten.Image, board *game.Board, hoverBtn string, lc *LayoutContext, fastForward bool) {
+// showControls gates End Turn/Auto/Menu and status text; replay has its own control bar.
+func drawGameHUD(screen *ebiten.Image, board *game.Board, hoverBtn string, lc *LayoutContext, showControls bool, fastForward bool) {
 	if board.Phase == game.PhaseDiceRoll {
 		drawDiceRoll(screen, board, lc)
 	}
 
 	drawTurnBanner(screen, board, lc)
 	drawPlayerBar(screen, board, lc)
+
+	if !showControls {
+		return
+	}
 
 	if board.StatusMessage != "" {
 		drawText(screen, board.StatusMessage, textCenterX(0, lc.Width, board.StatusMessage), int(lc.StatusTextY()), colorText)
@@ -30,11 +35,6 @@ func drawGameHUD(screen *ebiten.Image, board *game.Board, hoverBtn string, lc *L
 
 	// Fast-forward stays visually "pressed" while active, not just on hover.
 	lc.BtnFastForward().Draw(screen, fastForward || hoverBtn == "fastforward")
-
-	if board.CheatMode {
-		cheatRect := lc.CheatHit()
-		drawText(screen, "Cheater!", cheatRect.X, cheatRect.Y+14, colorText)
-	}
 }
 
 func drawTurnBanner(screen *ebiten.Image, board *game.Board, lc *LayoutContext) {

@@ -20,12 +20,9 @@ type AttackResult struct {
 	AttackerWins  bool
 }
 
-func ResolveAttack(rng *rand.Rand, attackerDice, defenderDice int, cheatAttacker, cheatDefender bool) AttackResult {
-	attackCount := effectiveDiceCount(attackerDice, cheatAttacker)
-	defenseCount := effectiveDiceCount(defenderDice, cheatDefender)
-
-	attackerRolls, attackTotal := RollDice(rng, attackCount)
-	defenderRolls, defenseTotal := RollDice(rng, defenseCount)
+func ResolveAttack(rng *rand.Rand, attackerDice, defenderDice int) AttackResult {
+	attackerRolls, attackTotal := RollDice(rng, attackerDice)
+	defenderRolls, defenseTotal := RollDice(rng, defenderDice)
 
 	return AttackResult{
 		AttackerRolls: attackerRolls,
@@ -36,13 +33,23 @@ func ResolveAttack(rng *rand.Rand, attackerDice, defenderDice int, cheatAttacker
 	}
 }
 
-func effectiveDiceCount(base int, cheat bool) int {
-	count := base
-	if cheat {
-		count = 1 + int(float64(count)*1.5)
+// attackResultFromRolls rebuilds an AttackResult from recorded rolls, for replay.
+func attackResultFromRolls(attackerRolls, defenderRolls []int) AttackResult {
+	attackTotal := sumInts(attackerRolls)
+	defenseTotal := sumInts(defenderRolls)
+	return AttackResult{
+		AttackerRolls: attackerRolls,
+		DefenderRolls: defenderRolls,
+		AttackTotal:   attackTotal,
+		DefenseTotal:  defenseTotal,
+		AttackerWins:  attackTotal > defenseTotal,
 	}
-	if count < 1 {
-		return 1
+}
+
+func sumInts(vals []int) int {
+	total := 0
+	for _, v := range vals {
+		total += v
 	}
-	return count
+	return total
 }

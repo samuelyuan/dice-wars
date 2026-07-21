@@ -19,9 +19,15 @@ type App struct {
 	hoverBtn               string
 	wantMenu               bool
 	layout                 *LayoutContext
-	fastForward            bool // speeds up AI turns while true
-	humanEliminated        bool // true once we've detected the human losing all territory this game
-	showEliminationOverlay bool // whether the "you've been eliminated" overlay is up
+	fastForward            bool    // speeds up AI turns while true
+	humanEliminated        bool    // true once we've detected the human losing all territory this game
+	showEliminationOverlay bool    // whether the "you've been eliminated" overlay is up
+	lastReplay             *game.Replay
+	replayPlayer           *game.ReplayPlayer
+	replaySpeed            float64 // Playback speed multiplier
+	replayPaused           bool
+	replayDragging         bool    // scrubbing the seek bar
+	replaySeekPreview      float64 // live drag position while scrubbing, [0,1]
 }
 
 type Screen int
@@ -30,13 +36,15 @@ const (
 	ScreenMenu Screen = iota
 	ScreenGame
 	ScreenVictory
+	ScreenReplay
 )
 
 func NewApp() *App {
 	return &App{
-		screen: ScreenMenu,
-		menu:   NewMenu(),
-		layout: &LayoutContext{Width: DefaultScreenWidth, Height: DefaultScreenHeight},
+		screen:      ScreenMenu,
+		menu:        NewMenu(),
+		layout:      &LayoutContext{Width: DefaultScreenWidth, Height: DefaultScreenHeight},
+		replaySpeed: 1.0,
 	}
 }
 
@@ -69,6 +77,8 @@ func (a *App) Update() error {
 		a.updateGame()
 	case ScreenVictory:
 		a.updateVictory()
+	case ScreenReplay:
+		a.updateReplay()
 	}
 	return nil
 }
@@ -103,6 +113,7 @@ func (a *App) updateGame() {
 	}
 	a.board.Update(frameDuration * a.effectiveGameSpeed())
 	if a.board.GameOver {
+		a.lastReplay = a.board.ExportReplay()
 		a.screen = ScreenVictory
 		return
 	}
@@ -117,6 +128,9 @@ func (a *App) updateVictory() {
 		lc := a.layout
 		mx, my := ebiten.CursorPosition()
 		switch {
+		case lc.VictoryReplayButton().Contains(mx, my):
+			a.startReplay()
+			return
 		case lc.VictoryRestartButton().Contains(mx, my):
 			a.board = game.NewBoard(a.menu.NumPlayers, a.menu.HumanList())
 			a.screen = ScreenGame
@@ -134,6 +148,70 @@ func (a *App) updateVictory() {
 	}
 }
 
+func (a *App) startReplay() {
+	if a.lastReplay == nil {
+		return
+	}
+	a.replayPlayer = game.NewReplayPlayer(a.lastReplay)
+	a.replayPaused = false
+	a.screen = ScreenReplay
+}
+
+func (a *App) updateReplay() {
+	if a.replayPlayer == nil {
+		a.screen = ScreenMenu
+		return
+	}
+
+	a.handleReplayInput()
+	if a.replayPlayer == nil {
+		// handleReplayInput may have exited replay mode (e.g. Exit button).
+		return
+	}
+
+	// Keyboard shortcuts alongside the on-screen controls
+	if inpututil.IsKeyJustPressed(ebiten.KeySpace) {
+		a.replayPaused = !a.replayPaused
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyRight) {
+		a.stepReplaySpeed(1)
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyLeft) {
+		a.stepReplaySpeed(-1)
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) || inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
+		a.replayPlayer = nil
+		a.screen = ScreenMenu
+		return
+	}
+
+	// Skip while dragging so the preview doesn't fight live playback.
+	if !a.replayPaused && !a.replayDragging {
+		a.replayPlayer.Board.Update(frameDuration * a.replaySpeed)
+		if a.replayIsFinished() {
+			a.replayPaused = true
+		}
+	}
+}
+
+func (a *App) stepReplaySpeed(delta int) {
+	idx := 0
+	for i, s := range replaySpeedOptions {
+		if s == a.replaySpeed {
+			idx = i
+			break
+		}
+	}
+	idx += delta
+	if idx < 0 {
+		idx = 0
+	}
+	if idx >= len(replaySpeedOptions) {
+		idx = len(replaySpeedOptions) - 1
+	}
+	a.replaySpeed = replaySpeedOptions[idx]
+}
+
 func (a *App) Draw(screen *ebiten.Image) {
 	screen.Fill(color.White)
 
@@ -142,14 +220,17 @@ func (a *App) Draw(screen *ebiten.Image) {
 		a.menu.Draw(screen, a.layout)
 	case ScreenGame:
 		if a.board != nil {
-			drawGame(screen, a.board, a.hoverBtn, a.layout, a.fastForward)
+			drawGame(screen, a.board, a.hoverBtn, a.layout, true, a.fastForward)
 			if a.showEliminationOverlay {
 				a.drawEliminationOverlay(screen, a.layout)
 			}
 		}
 	case ScreenVictory:
-		if a.board != nil {
-			drawVictory(screen, a.board.VictoryPlayer, a.board.VictoryHuman, a.layout)
+		a.drawVictory(screen, a.layout)
+	case ScreenReplay:
+		if a.replayPlayer != nil {
+			drawGame(screen, a.replayPlayer.Board, "", a.layout, false, false)
+			a.drawReplayControls(screen, a.layout)
 		}
 	}
 }
@@ -158,16 +239,26 @@ func (a *App) Layout(outsideWidth, outsideHeight int) (int, int) {
 	return outsideWidth, outsideHeight
 }
 
-func drawVictory(screen *ebiten.Image, player int, human bool, lc *LayoutContext) {
-	msg := "Player " + strconv.Itoa(player+1) + " wins!"
-	if human {
+func (a *App) drawVictory(screen *ebiten.Image, lc *LayoutContext) {
+	if a.board == nil {
+		return
+	}
+	header := "VICTORY!"
+	msg := "Player " + strconv.Itoa(a.board.VictoryPlayer+1) + " wins!"
+	switch {
+	case a.board.VictoryHuman:
 		msg = "You win!"
+	case a.board.HumanIndex() >= 0:
+		// GameOver can fire on the same attack that eliminates the human,
+		// skipping the elimination overlay — still show the loss here.
+		header = "DEFEAT"
 	}
 	centerY := lc.Height / 2
-	drawText(screen, "VICTORY!", textCenterX(0, lc.Width, "VICTORY!"), centerY-20, colorText)
+	drawText(screen, header, textCenterX(0, lc.Width, header), centerY-20, colorText)
 	drawText(screen, msg, textCenterX(0, lc.Width, msg), centerY+20, colorText)
 
 	mx, my := ebiten.CursorPosition()
+	lc.VictoryReplayButton().Draw(screen, lc.VictoryReplayButton().Contains(mx, my))
 	lc.VictoryRestartButton().Draw(screen, lc.VictoryRestartButton().Contains(mx, my))
 	lc.VictoryMenuButton().Draw(screen, lc.VictoryMenuButton().Contains(mx, my))
 }
